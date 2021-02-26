@@ -131,10 +131,12 @@ def generate_level(level):
 
 
 def game():
+    try:
+        player, level_x, level_y = generate_level(load_level(input("введите уровень\n")))
+    except FileNotFoundError:
+        print('Такого файла не существует')
+        exit()
     start_screen()
-
-    player, level_x, level_y = generate_level(load_level('map.txt'))
-
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
