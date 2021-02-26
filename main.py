@@ -130,12 +130,30 @@ def generate_level(level):
     return new_player, x, y
 
 
+class Camera:
+    # зададим начальный сдвиг камеры
+    def __init__(self):
+        self.dx = 0
+        self.dy = 0
+
+    # сдвинуть объект obj на смещение камеры
+    def apply(self, obj):
+        obj.rect.x += self.dx
+        obj.rect.y += self.dy
+
+    # позиционировать камеру на объекте target
+    def update(self, target):
+        self.dx = -(target.rect.x + target.rect.w // 2 - width // 2)
+        self.dy = -(target.rect.y + target.rect.h // 2 - height // 2)
+
+
 def game():
     try:
         player, level_x, level_y = generate_level(load_level(input("введите уровень\n")))
     except FileNotFoundError:
         print('Такого файла не существует')
         exit()
+    camera = Camera()
     start_screen()
     while True:
         for event in pygame.event.get():
@@ -151,7 +169,13 @@ def game():
                 elif event.key == pygame.K_RIGHT:
                     player.move(0, 1, 0, 0)
 
+        camera.update(player)
+        # обновляем положение всех спрайтов
+        for sprite in all_sprites:
+            camera.apply(sprite)
+
         pygame.display.flip()
+        screen.fill((0, 0, 0))
         all_sprites.draw(screen)
         player_group.draw(screen)
         clock.tick(FPS)
