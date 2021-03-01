@@ -1,22 +1,33 @@
 import os
+import pygame
 import sys
 
-import pygame
-
+FPS = 50
+player = None
+fl = True
+clock = pygame.time.Clock()
+# группы спрайтов
+all_sprites = pygame.sprite.Group()
+tiles_group = pygame.sprite.Group()
+player_group = pygame.sprite.Group()
 pygame.init()
 size = width, height = 500, 500
 screen = pygame.display.set_mode(size)
-FPS = 50
-clock = pygame.time.Clock()
+xxx, yyy = 0, 0
 
 
 def load_image(name, colorkey=None):
     fullname = os.path.join('data', name)
-    # если файл не существует, то выходим
-    if not os.path.isfile(fullname):
+    try:
+        image = pygame.image.load(fullname).convert()
+    except SystemError:
         print(f"Файл с изображением '{fullname}' не найден")
-        sys.exit()
-    image = pygame.image.load(fullname)
+    if colorkey is not None:
+        if colorkey == -1:
+            colorkey = image.get_at((0, 0))
+        image.set_colorkey(colorkey)
+    else:
+        image = image.convert_alpha()
     return image
 
 
@@ -66,18 +77,12 @@ def load_level(filename):
 
 
 tile_images = {
-        'wall': load_image('box.png'),
-        'empty': load_image('grass.png')
-    }
-player_image = load_image('mario.png')
+    'wall': load_image('box.png'),
+    'empty': load_image('grass.png')
+}
+player_image = load_image('mario.png', -1)
 
 tile_width = tile_height = 50
-
-player = None
-
-all_sprites = pygame.sprite.Group()
-tiles_group = pygame.sprite.Group()
-player_group = pygame.sprite.Group()
 
 
 class Tile(pygame.sprite.Sprite):
@@ -98,24 +103,41 @@ class Player(pygame.sprite.Sprite):
 
     def move(self, left, right, up, down):
         if left:
+            save = self.rect.x
             self.rect.x -= tile_width
             if pygame.sprite.spritecollideany(self, tiles_group).tile_type == 'wall':
-                self.rect.x += tile_width
+                self.rect.x = save
+                return False
+            self.rect.x = save
         if right:
+            save = self.rect.x
             self.rect.x += tile_width
             if pygame.sprite.spritecollideany(self, tiles_group).tile_type == 'wall':
-                self.rect.x -= tile_width
+                self.rect.x = save
+                return False
+            self.rect.x = save
         if up:
+            save = self.rect.y
             self.rect.y -= tile_height
             if pygame.sprite.spritecollideany(self, tiles_group).tile_type == 'wall':
-                self.rect.y += tile_width
+                self.rect.y = save
+                return False
+            self.rect.y = save
         if down:
+            save = self.rect.y
             self.rect.y += tile_height
             if pygame.sprite.spritecollideany(self, tiles_group).tile_type == 'wall':
-                self.rect.y -= tile_width
+                self.rect.y = save
+                return False
+            self.rect.y = save
+        return True
 
 
 def generate_level(level):
+    global fl, xxx, yyy, all_sprites, tiles_group, player_group
+    all_sprites = pygame.sprite.Group()
+    tiles_group = pygame.sprite.Group()
+    player_group = pygame.sprite.Group()
     new_player, x, y = None, None, None
     for y in range(len(level)):
         for x in range(len(level[y])):
@@ -123,59 +145,62 @@ def generate_level(level):
                 Tile('empty', x, y)
             elif level[y][x] == '#':
                 Tile('wall', x, y)
-            elif level[y][x] == '@':
+            elif level[y][x] == '@' and fl:
                 Tile('empty', x, y)
                 new_player = Player(x, y)
+                xxx, yyy = x, y
+                fl = False
+            elif not fl and level[y][x] == '@':
+                Tile('empty', x, y)
+    if not fl:
+        new_player = Player(xxx, yyy)
     # вернем игрока, а также размер поля в клетках
     return new_player, x, y
 
 
-class Camera:
-    # зададим начальный сдвиг камеры
-    def __init__(self):
-        self.dx = 0
-        self.dy = 0
-
-    # сдвинуть объект obj на смещение камеры
-    def apply(self, obj):
-        obj.rect.x += self.dx
-        obj.rect.y += self.dy
-
-    # позиционировать камеру на объекте target
-    def update(self, target):
-        self.dx = -(target.rect.x + target.rect.w // 2 - width // 2)
-        self.dy = -(target.rect.y + target.rect.h // 2 - height // 2)
-
-
 def game():
-    try:
-        player, level_x, level_y = generate_level(load_level(input("введите уровень\n")))
-    except FileNotFoundError:
-        print('Такого файла не существует')
-        exit()
-    camera = Camera()
+    file = input("введите название файла с картой уровня:\n")
+    file = load_level(file)
+    player, level_x, level_y = generate_level(file)
     start_screen()
     while True:
+        spis = []
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 terminate()
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_LEFT:
-                    player.move(1, 0, 0, 0)
+                    if player.move(1, 0, 0, 0):
+                        for i in range(len(file)):
+                            ppp = ''
+                            ppp += file[i][-1]
+                            ppp += file[i][:-1]
+                            spis.append(ppp)
+                        file = spis[::]
+                        player, level_x, level_y = generate_level(file)
                 elif event.key == pygame.K_UP:
-                    player.move(0, 0, 1, 0)
+                    if player.move(0, 0, 1, 0):
+                        spis.append(file[-1])
+                        spis.extend(file[:-1])
+                        file = spis[::]
+                        player, level_x, level_y = generate_level(file)
                 elif event.key == pygame.K_DOWN:
-                    player.move(0, 0, 0, 1)
+                    if player.move(0, 0, 0, 1):
+                        spis = file[1:]
+                        spis.append(file[0])
+                        file = spis[::]
+                        player, level_x, level_y = generate_level(file)
                 elif event.key == pygame.K_RIGHT:
-                    player.move(0, 1, 0, 0)
-
-        camera.update(player)
-        # обновляем положение всех спрайтов
-        for sprite in all_sprites:
-            camera.apply(sprite)
+                    if player.move(0, 1, 0, 0):
+                        for i in range(len(file)):
+                            ppp = ''
+                            ppp += file[i][1:]
+                            ppp += file[i][0]
+                            spis.append(ppp)
+                        file = spis[::]
+                        player, level_x, level_y = generate_level(file)
 
         pygame.display.flip()
-        screen.fill((0, 0, 0))
         all_sprites.draw(screen)
         player_group.draw(screen)
         clock.tick(FPS)
